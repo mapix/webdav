@@ -20,6 +20,7 @@ type MountCredentials struct {
 
 type MountPointConfig struct {
 	UrlPrefix     string `json:"urlPrefix"`
+	ReadOnly      bool   `json:"readonly"`
 	RootDirectory string `json:"rootDirectory"`
 	ErrorMessage  string `json:"errorMessage"`
 }
@@ -65,7 +66,7 @@ func getRemoteUser(auth_url string, username string, password string) (*User, er
 		}
 		user := &User{
 			Scope:  mountConfig.RootDirectory,
-			Modify: true,
+			Modify: !mountConfig.ReadOnly,
 			Rules:  []*Rule{},
 			Handler: &webdav.Handler{
 				Prefix: mountConfig.UrlPrefix,
