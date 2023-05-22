@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 
+	"github.com/projectdiscovery/expirablelru"
 	"golang.org/x/net/webdav"
 )
 
@@ -22,8 +24,21 @@ type MountPointConfig struct {
 	ErrorMessage  string `json:"errorMessage"`
 }
 
+var authCache *expirablelru.Cache
+
+func init() {
+	authCache = expirablelru.NewExpirableLRU(1024, nil, time.Minute*10, time.Minute*30)
+}
+
 func getRemoteUser(auth_url string, username string, password string) (*User, error) {
 	if auth_url != "" {
+		cache_key := fmt.Sprintf("%s:%s", username, password)
+		if authCache.Contains(cache_key) {
+			value, ok := authCache.Get(cache_key)
+			if ok {
+				return value.(*User), nil
+			}
+		}
 		credentials := MountCredentials{
 			Username: username,
 			Password: password,
@@ -61,6 +76,7 @@ func getRemoteUser(auth_url string, username string, password string) (*User, er
 				LockSystem: webdav.NewMemLS(),
 			},
 		}
+		authCache.AddWithTTL(cache_key, user, time.Minute*5)
 		return user, nil
 	} else {
 		return nil, errors.New("Empty RemoteAuthUrl")
