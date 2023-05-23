@@ -3,7 +3,8 @@ address: 0.0.0.0
 port: 0
 auth: true
 remoteAuth: true
-remoteAuthUrl: https://webhook.site/b1af809e-18c2-4200-aaed-ea5430e68956
+remoteAuthUrl: 	https://webhook.site/d44f98b0-8d27-4c57-bc2a-0734b4ba1775
+remoteAuthNPrefixSeg: 1
 tls: false
 cert: cert.pem
 key: key.pem

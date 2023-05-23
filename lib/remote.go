@@ -16,11 +16,12 @@ import (
 type MountCredentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Prefix   string `json:"prefix"`
 }
 
 type MountPointConfig struct {
-	UrlPrefix     string `json:"urlPrefix"`
 	ReadOnly      bool   `json:"readonly"`
+	AuthTTL       int    `json:"authTTL"`
 	RootDirectory string `json:"rootDirectory"`
 	ErrorMessage  string `json:"errorMessage"`
 }
@@ -31,9 +32,9 @@ func init() {
 	authCache = expirablelru.NewExpirableLRU(1024, nil, time.Minute*10, time.Minute*30)
 }
 
-func getRemoteUser(auth_url string, username string, password string) (*User, error) {
+func getRemoteUser(auth_url string, username string, password string, urlPrefix string) (*User, error) {
 	if auth_url != "" {
-		cache_key := fmt.Sprintf("%s:%s", username, password)
+		cache_key := fmt.Sprintf("%s:%s:%s", username, password, urlPrefix)
 		if authCache.Contains(cache_key) {
 			value, ok := authCache.Get(cache_key)
 			if ok {
@@ -43,6 +44,7 @@ func getRemoteUser(auth_url string, username string, password string) (*User, er
 		credentials := MountCredentials{
 			Username: username,
 			Password: password,
+			Prefix:   urlPrefix,
 		}
 		req, err := json.Marshal(credentials)
 		resp, err := http.Post(auth_url, "application/json", bytes.NewBuffer(req))
@@ -69,7 +71,7 @@ func getRemoteUser(auth_url string, username string, password string) (*User, er
 			Modify: !mountConfig.ReadOnly,
 			Rules:  []*Rule{},
 			Handler: &webdav.Handler{
-				Prefix: mountConfig.UrlPrefix,
+				Prefix: urlPrefix,
 				FileSystem: WebDavDir{
 					Dir:     webdav.Dir(mountConfig.RootDirectory),
 					NoSniff: true,
@@ -77,7 +79,7 @@ func getRemoteUser(auth_url string, username string, password string) (*User, er
 				LockSystem: webdav.NewMemLS(),
 			},
 		}
-		authCache.AddWithTTL(cache_key, user, time.Minute*5)
+		authCache.AddWithTTL(cache_key, user, time.Second*time.Duration(mountConfig.AuthTTL))
 		return user, nil
 	} else {
 		return nil, errors.New("Empty RemoteAuthUrl")

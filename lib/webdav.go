@@ -22,14 +22,15 @@ type CorsCfg struct {
 // Config is the configuration of a WebDAV instance.
 type Config struct {
 	*User
-	Auth          bool
-	RemoteAuth    bool
-	RemoteAuthUrl string
-	Debug         bool
-	NoSniff       bool
-	Cors          CorsCfg
-	Users         map[string]*User
-	LogFormat     string
+	Auth                 bool
+	RemoteAuth           bool
+	RemoteAuthUrl        string
+	RemoteAuthNPrefixSeg int
+	Debug                bool
+	NoSniff              bool
+	Cors                 CorsCfg
+	Users                map[string]*User
+	LogFormat            string
 }
 
 // ServeHTTP determines if the request is for this plugin, and if all prerequisites are met.
@@ -86,9 +87,10 @@ func (c *Config) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		user, ok := c.Users[username]
 		if !ok {
-			fmt.Println(c.RemoteAuth)
-			if c.RemoteAuth {
-				user, err := getRemoteUser(c.RemoteAuthUrl, username, password)
+			paths := strings.Split(r.URL.Path, "/")
+
+			if c.RemoteAuth && len(paths) >= c.RemoteAuthNPrefixSeg {
+				user, err := getRemoteUser(c.RemoteAuthUrl, username, password, "/"+strings.Join(paths[1:c.RemoteAuthNPrefixSeg+1], "/"))
 				if err != nil {
 					http.Error(w, fmt.Sprintf("Not authorized : %s", err), 401)
 					return

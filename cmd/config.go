@@ -176,6 +176,7 @@ func corsProperty(property string, cfg map[string]interface{}) []string {
 }
 
 func readConfig(flags *pflag.FlagSet) *lib.Config {
+	remoteAuthNPrefixSeg, _ := strconv.ParseInt(getOpt(flags, "remoteAuthNPrefixSeg"), 10, 64)
 	cfg := &lib.Config{
 		User: &lib.User{
 			Scope:  getOpt(flags, "scope"),
@@ -190,11 +191,12 @@ func readConfig(flags *pflag.FlagSet) *lib.Config {
 				LockSystem: webdav.NewMemLS(),
 			},
 		},
-		Debug:         getOptB(flags, "debug"),
-		Auth:          getOptB(flags, "auth"),
-		RemoteAuth:    getOptB(flags, "remoteAuth"),
-		RemoteAuthUrl: getOpt(flags, "remoteAuthUrl"),
-		NoSniff:       getOptB(flags, "nosniff"),
+		Debug:                getOptB(flags, "debug"),
+		Auth:                 getOptB(flags, "auth"),
+		RemoteAuth:           getOptB(flags, "remoteAuth"),
+		RemoteAuthUrl:        getOpt(flags, "remoteAuthUrl"),
+		RemoteAuthNPrefixSeg: int(remoteAuthNPrefixSeg),
+		NoSniff:              getOptB(flags, "nosniff"),
 		Cors: lib.CorsCfg{
 			Enabled:     false,
 			Credentials: false,
