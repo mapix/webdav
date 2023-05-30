@@ -31,9 +31,33 @@ type MountPointConfig struct {
 }
 
 var authCache *expirablelru.Cache
+var redisPool *redis.Pool
 
 func init() {
 	authCache = expirablelru.NewExpirableLRU(1024, nil, time.Minute*10, time.Minute*30)
+	redisHost := os.Getenv("REDIS_HOST")
+	redisPort := os.Getenv("REDIS_PORT")
+	if redisHost == "" || redisPort == "" {
+		panic("error: REDIS_HOST or REDIS_PORT not set")
+	}
+	redisUrl := fmt.Sprintf("%s:%s", redisHost, redisPort)
+	redisPassword := os.Getenv("REDIS_PASSWORD")
+	if redisPassword == "" {
+		panic("error: REDIS_PASSWORD not set")
+	}
+	redisPool = &redis.Pool{
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.Dial("tcp", redisUrl)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := c.Do("AUTH", redisPassword); err != nil {
+				c.Close()
+				return nil, err
+			}
+			return c, err
+		},
+	}
 }
 
 func getRemoteUser(auth_url string, username string, password string, urlPrefix string) (*User, error) {
@@ -71,30 +95,10 @@ func getRemoteUser(auth_url string, username string, password string, urlPrefix 
 			return nil, errors.New(mountConfig.ErrorMessage)
 		}
 
-		redisHost := os.Getenv("REDIS_HOST")
-		redisPort := os.Getenv("REDIS_PORT")
-		if redisHost == "" || redisPort == "" {
-			return nil, errors.New("error: REDIS_HOST or REDIS_PORT not set")
+		if redisPool == nil {
+			return nil, errors.New("redis pool not initialized")
 		}
-		redisUrl := fmt.Sprintf("%s:%s", redisHost, redisPort)
-		redisPassword := os.Getenv("REDIS_PASSWORD")
-		if redisPassword == "" {
-			return nil, errors.New("error: REDIS_PASSWORD not set")
-		}
-		p := &redis.Pool{
-			Dial: func() (redis.Conn, error) {
-				c, err := redis.Dial("tcp", redisUrl)
-				if err != nil {
-					return nil, err
-				}
-				if _, err := c.Do("AUTH", redisPassword); err != nil {
-					c.Close()
-					return nil, err
-				}
-				return c, err
-			},
-		}
-		rls := redisLs.NewRedisLS(p, "webdav:")
+		rls := redisLs.NewRedisLS(redisPool, "webdav:")
 		user := &User{
 			Scope:  mountConfig.RootDirectory,
 			Modify: !mountConfig.ReadOnly,
