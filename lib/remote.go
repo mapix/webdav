@@ -7,9 +7,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/gomodule/redigo/redis"
 	"github.com/projectdiscovery/expirablelru"
+
+	redisLs "github.com/y805939188/go-webdav-redis-ls"
 	"golang.org/x/net/webdav"
 )
 
@@ -66,6 +70,31 @@ func getRemoteUser(auth_url string, username string, password string, urlPrefix 
 		if mountConfig.ErrorMessage != "" {
 			return nil, errors.New(mountConfig.ErrorMessage)
 		}
+
+		redisHost := os.Getenv("REDIS_HOST")
+		redisPort := os.Getenv("REDIS_PORT")
+		if redisHost == "" || redisPort == "" {
+			return nil, errors.New("error: REDIS_HOST or REDIS_PORT not set")
+		}
+		redisUrl := fmt.Sprintf("%s:%s", redisHost, redisPort)
+		redisPassword := os.Getenv("REDIS_PASSWORD")
+		if redisPassword == "" {
+			return nil, errors.New("error: REDIS_PASSWORD not set")
+		}
+		p := &redis.Pool{
+			Dial: func() (redis.Conn, error) {
+				c, err := redis.Dial("tcp", redisUrl)
+				if err != nil {
+					return nil, err
+				}
+				if _, err := c.Do("AUTH", redisPassword); err != nil {
+					c.Close()
+					return nil, err
+				}
+				return c, err
+			},
+		}
+		rls := redisLs.NewRedisLS(p, "webdav:")
 		user := &User{
 			Scope:  mountConfig.RootDirectory,
 			Modify: !mountConfig.ReadOnly,
@@ -76,7 +105,7 @@ func getRemoteUser(auth_url string, username string, password string, urlPrefix 
 					Dir:     webdav.Dir(mountConfig.RootDirectory),
 					NoSniff: true,
 				},
-				LockSystem: webdav.NewMemLS(),
+				LockSystem: rls,
 			},
 		}
 		authCache.AddWithTTL(cache_key, user, time.Second*time.Duration(mountConfig.AuthTTL))
