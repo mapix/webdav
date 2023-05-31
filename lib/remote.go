@@ -12,6 +12,7 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/projectdiscovery/expirablelru"
+	"go.uber.org/zap"
 
 	redisLs "github.com/y805939188/go-webdav-redis-ls"
 	"golang.org/x/net/webdav"
@@ -54,6 +55,27 @@ func init() {
 			if _, err := c.Do("AUTH", redisPassword); err != nil {
 				c.Close()
 				return nil, err
+			} else {
+				err = redisLs.ReleaseScript.Load(c)
+				if err != nil {
+					zap.S().Errorf("error loading release script: %s", err)
+				}
+				err = redisLs.CreateScript.Load(c)
+				if err != nil {
+					zap.S().Errorf("error loading create script: %s", err)
+				}
+				err = redisLs.ConfirmScript.Load(c)
+				if err != nil {
+					zap.S().Errorf("error loading confirm script: %s", err)
+				}
+				err = redisLs.RefreshScript.Load(c)
+				if err != nil {
+					zap.S().Errorf("error loading refresh script: %s", err)
+				}
+				err = redisLs.UnlockScript.Load(c)
+				if err != nil {
+					zap.S().Errorf("error loading unlock script: %s", err)
+				}
 			}
 			return c, err
 		},
@@ -98,7 +120,9 @@ func getRemoteUser(auth_url string, username string, password string, urlPrefix 
 		if redisPool == nil {
 			return nil, errors.New("redis pool not initialized")
 		}
+		// redisLs.CreateScript
 		rls := redisLs.NewRedisLS(redisPool, "webdav:")
+
 		user := &User{
 			Scope:  mountConfig.RootDirectory,
 			Modify: !mountConfig.ReadOnly,
@@ -108,6 +132,14 @@ func getRemoteUser(auth_url string, username string, password string, urlPrefix 
 				FileSystem: WebDavDir{
 					Dir:     webdav.Dir(mountConfig.RootDirectory),
 					NoSniff: true,
+				},
+				Logger: func(r *http.Request, err error) {
+					zap.L().Info("request: ", zap.String("method: ", r.Method), zap.String("url: ", r.URL.String()))
+					if err != nil {
+						zap.L().Error("err occurred: ", zap.String("error: ", err.Error()))
+					} else {
+						zap.L().Info("not error: ", zap.String("error: ", "nil"))
+					}
 				},
 				LockSystem: rls,
 			},
