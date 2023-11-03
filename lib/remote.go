@@ -44,18 +44,18 @@ func init() {
 	}
 	redisUrl := fmt.Sprintf("%s:%s", redisHost, redisPort)
 	redisPassword := os.Getenv("REDIS_PASSWORD")
-	redisDBIndex := os.Getenv("REDIS_DB_INDEX")
+	redisDB := os.Getenv("REDIS_DB")
 	if redisPassword == "" {
 		panic("error: REDIS_PASSWORD not set")
 	}
 	redisPool = &redis.Pool{
 		Dial: func() (redis.Conn, error) {
-			dbIndex, err := strconv.Atoi(redisDBIndex)
+			db, err := strconv.Atoi(redisDB)
 			if err != nil {
 				return nil, err
 			}
-			dialDBIndex := redis.DialDatabase(dbIndex)
-			c, err := redis.Dial("tcp", redisUrl, dialDBIndex)
+			dialDB := redis.DialDatabase(db)
+			c, err := redis.Dial("tcp", redisUrl, dialDB)
 			if err != nil {
 				return nil, err
 			}
