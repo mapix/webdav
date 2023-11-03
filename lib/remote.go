@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -43,12 +44,18 @@ func init() {
 	}
 	redisUrl := fmt.Sprintf("%s:%s", redisHost, redisPort)
 	redisPassword := os.Getenv("REDIS_PASSWORD")
+	redisDBIndex := os.Getenv("REDIS_DB_INDEX")
 	if redisPassword == "" {
 		panic("error: REDIS_PASSWORD not set")
 	}
 	redisPool = &redis.Pool{
 		Dial: func() (redis.Conn, error) {
-			c, err := redis.Dial("tcp", redisUrl)
+			dbIndex, err := strconv.Atoi(redisDBIndex)
+			if err != nil {
+				return nil, err
+			}
+			dialDBIndex := redis.DialDatabase(dbIndex)
+			c, err := redis.Dial("tcp", redisUrl, dialDBIndex)
 			if err != nil {
 				return nil, err
 			}
