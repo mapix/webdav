@@ -55,35 +55,32 @@ func init() {
 				return nil, err
 			}
 			dialDB := redis.DialDatabase(db)
-			c, err := redis.Dial("tcp", redisUrl, dialDB)
+			pws := redis.DialPassword(redisPassword)
+			c, err := redis.Dial("tcp", redisUrl, dialDB, pws)
 			if err != nil {
 				return nil, err
 			}
-			if _, err := c.Do("AUTH", redisPassword); err != nil {
-				c.Close()
-				return nil, err
-			} else {
-				err = redisLs.ReleaseScript.Load(c)
-				if err != nil {
-					zap.S().Errorf("error loading release script: %s", err)
-				}
-				err = redisLs.CreateScript.Load(c)
-				if err != nil {
-					zap.S().Errorf("error loading create script: %s", err)
-				}
-				err = redisLs.ConfirmScript.Load(c)
-				if err != nil {
-					zap.S().Errorf("error loading confirm script: %s", err)
-				}
-				err = redisLs.RefreshScript.Load(c)
-				if err != nil {
-					zap.S().Errorf("error loading refresh script: %s", err)
-				}
-				err = redisLs.UnlockScript.Load(c)
-				if err != nil {
-					zap.S().Errorf("error loading unlock script: %s", err)
-				}
+			err = redisLs.ReleaseScript.Load(c)
+			if err != nil {
+				zap.S().Errorf("error loading release script: %s", err)
 			}
+			err = redisLs.CreateScript.Load(c)
+			if err != nil {
+				zap.S().Errorf("error loading create script: %s", err)
+			}
+			err = redisLs.ConfirmScript.Load(c)
+			if err != nil {
+				zap.S().Errorf("error loading confirm script: %s", err)
+			}
+			err = redisLs.RefreshScript.Load(c)
+			if err != nil {
+				zap.S().Errorf("error loading refresh script: %s", err)
+			}
+			err = redisLs.UnlockScript.Load(c)
+			if err != nil {
+				zap.S().Errorf("error loading unlock script: %s", err)
+			}
+
 			return c, err
 		},
 	}
