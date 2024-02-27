@@ -1,0 +1,14 @@
+# Server related settings
+address: 0.0.0.0
+port: 6666
+# port: 8585
+# auth: false
+auth: true
+remoteAuth: true
+remoteAuthUrl: http://localhost:8899/webdav/auth
+remoteAuthNPrefixSeg: 1
+
+# # Default user settings (will be merged)
+scope: ./var/
+# scope: ./test/
+modify: true

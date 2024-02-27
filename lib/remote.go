@@ -20,6 +20,8 @@ import (
 )
 
 type MountCredentials struct {
+	Path     string `json:"path"`
+	Token    string `json:"token"`
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Prefix   string `json:"prefix"`
@@ -34,9 +36,13 @@ type MountPointConfig struct {
 
 var authCache *expirablelru.Cache
 var redisPool *redis.Pool
+var isProd bool = os.Getenv("PROD_ENV") != ""
 
 func init() {
 	authCache = expirablelru.NewExpirableLRU(1024, nil, time.Minute*10, time.Minute*30)
+	if !isProd {
+		return
+	}
 	redisHost := os.Getenv("REDIS_HOST")
 	redisPort := os.Getenv("REDIS_PORT")
 	if redisHost == "" || redisPort == "" {
@@ -86,7 +92,7 @@ func init() {
 	}
 }
 
-func getRemoteUser(auth_url string, username string, password string, urlPrefix string) (*User, error) {
+func getRemoteUser(auth_url, token, username, password, urlPrefix, path string) (*User, error) {
 	if auth_url != "" {
 		cache_key := fmt.Sprintf("%s:%s:%s", username, password, urlPrefix)
 		if authCache.Contains(cache_key) {
@@ -96,6 +102,8 @@ func getRemoteUser(auth_url string, username string, password string, urlPrefix 
 			}
 		}
 		credentials := MountCredentials{
+			Path:     path,
+			Token:    token,
 			Username: username,
 			Password: password,
 			Prefix:   urlPrefix,
@@ -103,6 +111,7 @@ func getRemoteUser(auth_url string, username string, password string, urlPrefix 
 		req, err := json.Marshal(credentials)
 		resp, err := http.Post(auth_url, "application/json", bytes.NewBuffer(req))
 		if err != nil {
+			return nil, fmt.Errorf("error: Failed to authenticate: %s", err.Error())
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
@@ -121,11 +130,17 @@ func getRemoteUser(auth_url string, username string, password string, urlPrefix 
 			return nil, errors.New(mountConfig.ErrorMessage)
 		}
 
-		if redisPool == nil {
+		if isProd && redisPool == nil {
 			return nil, errors.New("redis pool not initialized")
 		}
 		// redisLs.CreateScript
-		rls := redisLs.NewRedisLS(redisPool, "webdav:")
+		// var rls *redisLs.RedisLS
+		var rls webdav.LockSystem
+		if isProd {
+			rls = redisLs.NewRedisLS(redisPool, "webdav:")
+		} else {
+			rls = webdav.NewMemLS()
+		}
 
 		user := &User{
 			Scope:  mountConfig.RootDirectory,
