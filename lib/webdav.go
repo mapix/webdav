@@ -33,6 +33,25 @@ type Config struct {
 	LogFormat            string
 }
 
+func parseBearerAuth(auth string) (token string, ok bool) {
+	const prefix = "Bearer "
+
+	parts := strings.Split(auth, " ")
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		return "", false
+	}
+
+	return parts[1], true
+}
+
+func BearerAuth(r *http.Request) (token string, ok bool) {
+	auth := r.Header.Get("Authorization")
+	if auth == "" {
+		return "", false
+	}
+	return parseBearerAuth(auth)
+}
+
 // ServeHTTP determines if the request is for this plugin, and if all prerequisites are met.
 func (c *Config) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	u := c.User
@@ -79,18 +98,26 @@ func (c *Config) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		// Gets the correct user for this request.
 		username, password, ok := r.BasicAuth()
+		token := ""
 		zap.L().Info("login attempt", zap.String("username", username), zap.String("remote_address", r.RemoteAddr))
 		if !ok {
-			http.Error(w, "Not authorized", 401)
-			return
+			token, ok = BearerAuth(r)
+			if !ok {
+				http.Error(w, "Not authorized", 401)
+				return
+			}
 		}
 
 		user, ok := c.Users[username]
 		if !ok {
 			paths := strings.Split(r.URL.Path, "/")
 
+			prefix := "/" + strings.Join(paths[1:c.RemoteAuthNPrefixSeg+1], "/")
+			if token != "" {
+				prefix += "/"
+			}
 			if c.RemoteAuth && len(paths) >= c.RemoteAuthNPrefixSeg {
-				user, err := getRemoteUser(c.RemoteAuthUrl, username, password, "/"+strings.Join(paths[1:c.RemoteAuthNPrefixSeg+1], "/"))
+				user, err := getRemoteUser(c.RemoteAuthUrl, token, username, password, prefix, r.URL.Path)
 				if err != nil {
 					http.Error(w, fmt.Sprintf("Not authorized : %s", err), 401)
 					return
@@ -148,11 +175,11 @@ func (c *Config) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//		the collection, or something else altogether.
 	//
 	// Get, when applied to collection, will return the same as PROPFIND method.
+
 	if r.Method == "GET" && strings.HasPrefix(r.URL.Path, u.Handler.Prefix) {
 		info, err := u.Handler.FileSystem.Stat(context.TODO(), strings.TrimPrefix(r.URL.Path, u.Handler.Prefix))
 		if err == nil && info.IsDir() {
 			r.Method = "PROPFIND"
-
 			if r.Header.Get("Depth") == "" {
 				r.Header.Add("Depth", "1")
 			}
